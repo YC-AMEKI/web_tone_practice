@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="听音辨名 · 绝对音感训练小工具（纯浏览器运行，无需后端）">
+<title>音准练习 · 听音辨名</title>
+<style>
+  :root{
+    --green:#15803d; --red:#b91c1c; --gray:#6b7280; --dark:#374151;
+    --note:#f3f4f6; --blue:#2563eb; --blue-active:#1d4ed8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px 12px;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:#f9fafb;color:#111827;display:flex;justify-content:center;min-height:100vh}
+  .app{width:100%;max-width:560px;background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.12);padding:16px 20px}
+  h1{margin:0;font-size:24px}
+  .sub{color:var(--gray);font-size:13px;margin:2px 0 10px}
+  .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
+  .row label{font-size:14px}
+  select{padding:4px 6px;border:1px solid #d1d5db;border-radius:6px;background:#fff;font-size:14px}
+  .check{display:flex;align-items:center;gap:4px;font-size:14px;margin-left:6px}
+  button{border:none;border-radius:8px;font-size:14px;cursor:pointer;padding:8px 12px;background:var(--note);color:var(--dark)}
+  button:disabled{opacity:.45;cursor:default}
+  .primary{flex:1;background:var(--blue);color:#fff;font-size:16px;font-weight:700;padding:10px 16px}
+  .primary:active{background:var(--blue-active)}
+  .notes{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:10px 0}
+  .notes button{font-size:15px;font-weight:700;padding:9px 0}
+  .notes button.ok{background:var(--green);color:#fff}
+  .notes button.bad{background:var(--red);color:#fff}
+  .feedback{min-height:46px;text-align:center;font-size:14.5px;white-space:pre-line;margin:8px 0 2px}
+  .stats{color:var(--gray);font-size:13px;text-align:center}
+  .bottom{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px}
+  .chips{display:flex;flex-wrap:wrap;gap:4px;font-size:12.5px}
+  .chips .ok{color:var(--green)} .chips .bad{color:var(--red)}
+  .progress{color:var(--gray);font-size:12.5px;white-space:nowrap}
+  .hint{color:#9ca3af;font-size:12.5px;text-align:center;margin:10px 0 2px}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>🎹 音准练习</h1>
+  <div class="sub">听音辨名 · 绝对音感训练</div>
+
+  <div class="row">
+    <label>调性</label><select id="scaleBox"></select>
+    <label>八度</label><select id="octaveBox"></select>
+    <label>题数</label><select id="sizeBox"></select>
+    <span class="check"><input type="checkbox" id="autoNext" checked><label for="autoNext">自动下一题</label></span>
+  </div>
+
+  <div class="row">
+    <button class="primary" id="playBtn">▶  开始练习</button>
+    <button id="prevBtn">⏮ 上一题</button>
+    <button id="nextBtn">⏭ 下一题</button>
+    <button id="mistakeBtn">🎯 错题</button>
+    <button id="revealBtn">🙈 看答案</button>
+  </div>
+
+  <div class="notes" id="noteGrid"></div>
+  <div class="feedback" id="feedback">选好调性、八度和题数，点「开始练习」🎧</div>
+  <div class="stats" id="stats"></div>
+  <div class="bottom">
+    <div class="chips" id="chips"></div>
+    <div class="progress" id="progress"></div>
+  </div>
+  <div class="hint">空格 = 下一题 · 点击音名直接作答 · 答对答错都会自动进入下一题</div>
+</div>
+<script>
+"use strict";
+// 乐理数据(须与桌面版 src/tone_practice.py 的 SCALES 等保持一致, 自检脚本会核对)
+const SCALES = {
+  "C大调": ["C", "D", "E", "F", "G", "A", "B"],
+  "G大调": ["G", "A", "B", "C", "D", "E", "F#"],
+  "D大调": ["D", "E", "F#", "G", "A", "B", "C#"],
+  "A大调": ["A", "B", "C#", "D", "E", "F#", "G#"],
+  "E大调": ["E", "F#", "G#", "A", "B", "C#", "D#"],
+  "B大调": ["B", "C#", "D#", "E", "F#", "G#", "A#"],
+  "F大调": ["F", "G", "A", "Bb", "C", "D", "E"],
+  "降B大调": ["Bb", "C", "D", "Eb", "F", "G", "A"],
+  "降E大调": ["Eb", "F", "G", "Ab", "Bb", "C", "D"],
+  "降A大调": ["Ab", "Bb", "C", "Db", "Eb", "F", "G"],
+  "降D大调": ["Db", "Eb", "F", "Gb", "Ab", "Bb", "C"],
+  "a小调(和声)": ["A", "B", "C", "D", "E", "F", "G#"],
+  "e小调(和声)": ["E", "F#", "G", "A", "B", "C", "D#"],
+  "b小调(和声)": ["B", "C#", "D", "E", "F#", "G", "A#"],
+  "d小调(和声)": ["D", "E", "F", "G", "A", "Bb", "C#"],
+  "g小调(和声)": ["G", "A", "Bb", "C", "D", "Eb", "F#"],
+  "c小调(和声)": ["C", "D", "Eb", "F", "G", "Ab", "B"],
+  "半音阶": ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+};
+const OCTAVE_CHOICES = ["随机", "1", "2", "3", "4", "5", "6"];
+const SESSION_CHOICES = ["5", "10", "20", "50"];
+
+const PC = {C:0, D:2, E:4, F:5, G:7, A:9, B:11};
+const SOLFEGE = {C:"do", D:"re", E:"mi", F:"fa", G:"sol", A:"la", B:"si"};
+const GREEN = "#15803d", RED = "#b91c1c", GRAY = "#6b7280", DARK = "#374151";
+
+const $ = id => document.getElementById(id);
+const el = {
+  scaleBox: $("scaleBox"), octaveBox: $("octaveBox"), sizeBox: $("sizeBox"),
+  autoNext: $("autoNext"), playBtn: $("playBtn"), prevBtn: $("prevBtn"),
+  nextBtn: $("nextBtn"), mistakeBtn: $("mistakeBtn"), revealBtn: $("revealBtn"),
+  noteGrid: $("noteGrid"), feedback: $("feedback"), stats: $("stats"),
+  chips: $("chips"), progress: $("progress"),
+};
+
+const state = {
+  questions: [], results: [], qIndex: 0, sessionActive: false,
+  attempts: 0, correct: 0, streak: 0, bestStreak: 0, history: [],
+  mistakes: loadMistakes(),
+};
+
+function loadMistakes(){
+  try { return JSON.parse(localStorage.getItem("mistakes") || "{}"); }
+  catch { return {}; }
+}
+function saveMistakes(){ localStorage.setItem("mistakes", JSON.stringify(state.mistakes)); }
+
+// ---- 乐理(音名都来自 SCALES, 只需算音高; 与桌面版 parse_note_name 同源的轻量版) ----
+function pcOf(name){
+  const sign = name.includes("#") ? 1 : -1;
+  return (PC[name[0]] + sign * (name.length - 1) + 12) % 12;
+}
+function midiOf(name, octave){ return (octave + 1) * 12 + pcOf(name); }
+function display(name){ return name.replace(/#/g, "♯").replace(/b/g, "♭"); }
+function solfege(name){ return SOLFEGE[name[0]] + display(name.slice(1)); }
+function expected(){ return state.questions[state.qIndex]; }
+function shownNote(){ return display(expected().name) + (Math.floor(expected().midi / 12) - 1); }
+function selectedOctave(){
+  const value = el.octaveBox.value;
+  return value === "随机" ? 1 + Math.floor(Math.random() * 6) : Number(value);
+}
+
+// ---- 内置钢琴音源: 桌面版加法合成的前端移植(Web Audio, 不需要任何音频文件/后端) ----
+const RATE = 44100, PARTIALS = 8;
+const INHARMONICITY = 0.0002, ATTACK_SEC = 0.003, FADE_SEC = 0.08, PEAK = 0.75;
+
+function midiToFreq(midi){ return 440 * Math.pow(2, (midi - 69) / 12); }
+
+// 音越高越短促: 返回 (采样时长, 基音衰减时间常数) —— 对应桌面版 _note_shape
+function noteShape(freq){
+  const duration = Math.min(3.2, Math.max(1.4, 2.8 * Math.pow(261.626 / freq, 0.55)));
+  const tau = Math.min(1.8, Math.max(0.4, 1.1 * Math.pow(220 / freq, 0.45)));
+  return [duration, tau];
+}
+
+// 第 k 个泛音的 (频率, 幅度, 衰减常数); 频率过高返回 null —— 对应桌面版 _partial_params
+function partialParams(k, freq, tau){
+  const f = k * freq * Math.sqrt(1 + INHARMONICITY * k * k);
+  if (f >= RATE * 0.45) return null;
+  const amp = Math.pow(k, -1.3) * Math.exp(-0.15 * (k - 1));
+  const tauK = tau / (0.7 + 0.3 * k);
+  return [f, amp, tauK];
+}
+
+// 加法合成一个音: 泛音 + 不谐和 + 指数衰减 + 起音/淡出包络 + 归一化 —— 对应桌面版 _synth_pure
+function synthNote(midi){
+  const freq = midiToFreq(midi);
+  const [duration, tau] = noteShape(freq);
+  const n = Math.floor(duration * RATE);
+  const sig = new Float32Array(n);
+  for (let k = 1; k <= PARTIALS; k++){
+    const p = partialParams(k, freq, tau);
+    if (!p) break;
+    const [f, amp, tauK] = p;
+    const omega = 2 * Math.PI * f / RATE;
+    const decay = Math.exp(-1 / (RATE * tauK));
+    let env = amp, phase = 0;
+    for (let i = 0; i < n; i++){
+      phase += omega;
+      sig[i] += env * Math.sin(phase);
+      env *= decay;
+    }
+  }
+  const a = 1 / (ATTACK_SEC * RATE);
+  const fadeFrom = n - Math.floor(FADE_SEC * RATE);
+  const fadeLen = n - fadeFrom;
+  let peak = 1e-9;
+  for (let i = 0; i < n; i++){
+    let g = 1 - Math.exp(-a * i);
+    if (i >= fadeFrom) g *= (n - i) / fadeLen;
+    sig[i] *= g;
+    const v = Math.abs(sig[i]);
+    if (v > peak) peak = v;
+  }
+  const scale = PEAK / peak;
+  for (let i = 0; i < n; i++) sig[i] *= scale;
+  return sig;
+}
+
+const samples = new Map();  // midi → Float32Array(页面加载时后台合成, 纯计算, 不需手势)
+const buffers = new Map();  // midi → AudioBuffer(首次播放时才建, AudioContext 需用户手势解锁)
+let audioCtx = null, current = null;
+
+function ensureCtx(){
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+function preloadSample(midi){
+  if (!samples.has(midi)) samples.set(midi, synthNote(midi));
+  return samples.get(midi);
+}
+
+function playNote(midi){
+  try {
+    const ctx = ensureCtx();
+    if (!buffers.has(midi)){
+      const data = preloadSample(midi);
+      const buf = ctx.createBuffer(1, data.length, RATE);
+      buf.copyToChannel(data, 0);
+      buffers.set(midi, buf);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buffers.get(midi);
+    src.connect(ctx.destination);
+    if (current){ try { current.stop(); } catch {} }
+    current = src;
+    src.start();
+  } catch (err){
+    setFeedback(`播放失败：${err.message}`, RED);
+  }
+}
+
+async function preload(){  // 后台合成全部音源(让出主线程, 不卡界面), 进度显示在右下角
+  const midis = [];
+  for (let octave = 1; octave <= 6; octave++)
+    for (let pc = 0; pc < 12; pc++) midis.push((octave + 1) * 12 + pc);
+  for (let i = 0; i < midis.length; i++){
+    preloadSample(midis[i]);
+    el.progress.textContent = `音源准备中 ${i + 1}/${midis.length}`;
+    if (i % 3 === 2) await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  el.progress.textContent = "";
+}
+
+// ---- 练习会话(逻辑与桌面版一一对应) ----
+let autoTimer = null;
+function cancelAutoNext(){ if (autoTimer){ clearTimeout(autoTimer); autoTimer = null; } }
+
+function startSession(fromMistakes){
+  cancelAutoNext();
+  let names;
+  if (fromMistakes){
+    names = Object.keys(state.mistakes).map(Number).sort((a, b) => a - b)
+      .map(pc => state.mistakes[pc].name);
+    if (!names.length){
+      setFeedback("错题集是空的；答错、跳过或看答案的音会自动收进来", GRAY);
+      return;
+    }
+  } else {
+    names = SCALES[el.scaleBox.value];
+  }
+  const count = Number(el.sizeBox.value);
+  const questions = [];
+  let previous = null;
+  for (let i = 0; i < count; i++){
+    const pool = names.filter(n => n !== previous);
+    const pick = pool.length ? pool : names;
+    previous = pick[Math.floor(Math.random() * pick.length)];
+    questions.push({name: previous, midi: midiOf(previous, selectedOctave())});
+  }
+  state.questions = questions;
+  state.results = Array(count).fill(null);
+  state.qIndex = 0;
+  state.sessionActive = true;
+  renderNoteButtons(names);
+  enterQuestion(0);
+}
+
+function enterQuestion(index){
+  state.qIndex = index;
+  const {midi} = expected();
+  for (const btn of el.noteGrid.children) btn.classList.remove("ok", "bad");
+  setPlayButton("🔁  重听", replay);
+  const recorded = state.results[index];
+  if (recorded === null){
+    setFeedback(`仔细听……第 ${index + 1}/${state.questions.length} 题，这是什么音？`, DARK);
+  } else {
+    applyResultColors(recorded.ok, recorded.clicked);
+    setFeedback(recorded.message, recorded.ok ? GREEN : RED);
+  }
+  playNote(midi);
+  renderStats();
+}
+
+function replay(){
+  if (!state.sessionActive){ setFeedback("还没有题目，点「开始练习」", GRAY); return; }
+  playNote(expected().midi);
+}
+
+function prevQuestion(){
+  if (!state.sessionActive){ setFeedback("还没有题目，点「开始练习」", GRAY); return; }
+  cancelAutoNext();
+  if (state.qIndex === 0){ setFeedback("已经是第一题了", GRAY); return; }
+  enterQuestion(state.qIndex - 1);
+}
+
+function nextQuestion(){
+  if (!state.sessionActive){ setFeedback("还没有题目，点「开始练习」", GRAY); return; }
+  cancelAutoNext();
+  if (state.results[state.qIndex] === null){ forfeit("⏭ 已跳过，正确答案"); return; }
+  if (state.qIndex + 1 >= state.questions.length){ showSummary(); return; }
+  enterQuestion(state.qIndex + 1);
+}
+
+function answer(name){
+  if (!state.sessionActive || state.results[state.qIndex] !== null){
+    setFeedback("这题已经作答过了，点「下一题」继续", GRAY);
+    return;
+  }
+  if (pcOf(name) === expected().midi % 12){
+    state.correct++; state.streak++;
+    state.bestStreak = Math.max(state.bestStreak, state.streak);
+    let message = `✅ 正确！是 ${shownNote()}（唱名 ${solfege(expected().name)}）`;
+    if (state.streak >= 3) message += `　🔥 连对 ${state.streak}`;
+    const expectedPc = expected().midi % 12;
+    if (expectedPc in state.mistakes){
+      delete state.mistakes[expectedPc];
+      saveMistakes(); updateMistakeButton();
+      message += "　🎉 已移出错题集";
+    }
+    state.results[state.qIndex] = {ok: true, clicked: name, message};
+    applyResultColors(true, name);
+    finish(true, message, GREEN);
+    if (el.autoNext.checked) autoTimer = setTimeout(nextQuestion, 900);
+  } else {
+    const message = `❌ 不是 ${display(name)}，正确答案是 ${shownNote()}`
+      + `（唱名 ${solfege(expected().name)}）。点「重听」加深印象 🎧`;
+    addMistake();
+    state.results[state.qIndex] = {ok: false, clicked: name, message};
+    applyResultColors(false, name);
+    finish(false, message, RED);
+    if (el.autoNext.checked) autoTimer = setTimeout(nextQuestion, 1400);  // 答错也自动下一题
+  }
+}
+
+function revealAnswer(){
+  if (!state.sessionActive || state.results[state.qIndex] !== null){
+    setFeedback("这题已经作答过了，点「下一题」继续", GRAY);
+    return;
+  }
+  forfeit("🙈 答案");
+}
+
+function forfeit(prefix){
+  const message = `${prefix}是 ${shownNote()}（唱名 ${solfege(expected().name)}），下一题加油`;
+  addMistake();
+  state.results[state.qIndex] = {ok: false, clicked: null, message};
+  applyResultColors(false, null);
+  finish(false, message, GRAY);
+  if (el.autoNext.checked) autoTimer = setTimeout(nextQuestion, 1400);
+}
+
+function showSummary(){
+  state.sessionActive = false;
+  cancelAutoNext();
+  const total = state.questions.length;
+  const right = state.questions.filter((q, i) => state.results[i].ok).map(q => q.name);
+  const wrong = state.questions.filter((q, i) => !state.results[i].ok).map(q => q.name);
+  const lines = [`🎉 练习完成！本轮 ${total} 题答对 ${right.length} 题（${Math.round(100 * right.length / total)}%）`];
+  if (right.length) lines.push("✅ 答对：" + [...new Set(right)].map(display).join("、"));
+  if (wrong.length){
+    const parts = [...new Set(wrong)].map(n => {
+      const c = wrong.filter(x => x === n).length;
+      return c > 1 ? `${display(n)}×${c}` : display(n);
+    });
+    lines.push(`❌ 答错：${parts.join("、")}（可点「错题」巩固）`);
+  } else {
+    lines.push("全部答对，太棒了！");
+  }
+  setFeedback(lines.join("\n"), DARK);
+  setPlayButton("▶  再来一组", () => startSession(false));
+  renderStats();
+}
+
+// ---- 记分与错题 ----
+function finish(ok, message, color){
+  state.attempts++;
+  if (!ok) state.streak = 0;
+  state.history.push([shownNote(), ok]);
+  if (state.history.length > 12) state.history = state.history.slice(-12);
+  setFeedback(message, color);
+  renderStats();
+  renderChips();
+}
+
+function addMistake(){
+  const pc = expected().midi % 12;
+  const item = state.mistakes[pc] || {name: expected().name, count: 0};
+  state.mistakes[pc] = {name: item.name, count: item.count + 1};
+  saveMistakes();
+  updateMistakeButton();
+}
+
+function applyResultColors(ok, clicked){
+  const right = noteButton(expected().name);
+  if (right) right.classList.add("ok");
+  if (!ok && clicked && clicked !== expected().name){
+    const wrong = noteButton(clicked);
+    if (wrong) wrong.classList.add("bad");
+  }
+}
+function noteButton(name){
+  for (const btn of el.noteGrid.children) if (btn.dataset.name === name) return btn;
+  return null;
+}
+
+// ---- 界面渲染 ----
+function setFeedback(text, color){ el.feedback.textContent = text; el.feedback.style.color = color; }
+
+function setPlayButton(text, handler){ el.playBtn.textContent = text; el.playBtn.onclick = handler; }
+
+function renderNoteButtons(names){
+  names = names || SCALES[el.scaleBox.value];
+  el.noteGrid.textContent = "";
+  for (const name of names){
+    const btn = document.createElement("button");
+    btn.textContent = display(name);
+    btn.dataset.name = name;
+    btn.onclick = () => answer(name);
+    el.noteGrid.appendChild(btn);
+  }
+}
+
+function updateMistakeButton(){
+  const count = Object.keys(state.mistakes).length;
+  el.mistakeBtn.textContent = `🎯 错题 (${count})`;
+  el.mistakeBtn.disabled = !count;
+}
+
+function renderStats(){
+  const head = state.sessionActive ? `第 ${state.qIndex + 1}/${state.questions.length} 题 · ` : "";
+  const acc = state.attempts ? Math.round(100 * state.correct / state.attempts) : 0;
+  el.stats.textContent = `${head}已答 ${state.attempts} · 正确 ${state.correct} · 准确率 ${acc}% `
+    + `· 连对 ${state.streak}（最佳 ${state.bestStreak}）`;
+}
+
+function renderChips(){
+  el.chips.textContent = "";
+  for (const [text, ok] of state.history){
+    const span = document.createElement("span");
+    span.className = ok ? "ok" : "bad";
+    span.textContent = `${text} ${ok ? "✓" : "✗"}`;
+    el.chips.appendChild(span);
+  }
+}
+
+function onSettingsChange(){
+  cancelAutoNext();
+  state.sessionActive = false;  // 切换调性/八度会作废进行中的一组
+  renderNoteButtons();
+  setPlayButton("▶  开始练习", () => startSession(false));
+  setFeedback(`已切换：${el.scaleBox.value} · 八度 ${el.octaveBox.value}，点「开始练习」开始`, GRAY);
+  renderStats();
+}
+
+// ---- 初始化 ----
+for (const [box, values, initial] of [
+  [el.scaleBox, Object.keys(SCALES), "C大调"],
+  [el.octaveBox, OCTAVE_CHOICES, "4"],
+  [el.sizeBox, SESSION_CHOICES, "10"],
+]){
+  for (const v of values){
+    const option = document.createElement("option");
+    option.value = option.textContent = v;
+    box.appendChild(option);
+  }
+  box.value = initial;
+}
+for (const box of [el.scaleBox, el.octaveBox]) box.onchange = onSettingsChange;
+
+el.prevBtn.onclick = prevQuestion;
+el.nextBtn.onclick = nextQuestion;
+el.mistakeBtn.onclick = () => startSession(true);
+el.revealBtn.onclick = revealAnswer;
+setPlayButton("▶  开始练习", () => startSession(false));
+
+document.addEventListener("keydown", e => {
+  if (e.code !== "Space") return;
+  if (["BUTTON", "SELECT", "INPUT"].includes(e.target.tagName)) return;  // 交给控件默认行为
+  e.preventDefault();
+  state.sessionActive ? nextQuestion() : startSession(false);
+});
+
+updateMistakeButton();
+renderNoteButtons();
+renderStats();
+preload();
+</script>
+</body>
+</html>
