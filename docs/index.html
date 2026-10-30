@@ -43,8 +43,20 @@
   .header-rule{height:3px;width:58px;margin:0 auto 14px;border-radius:2px;
        background:linear-gradient(90deg, var(--blue), #22c55e)}
 
+  /* 页面切换标签: 日常练习 / 错题练习 */
+  .tabs{display:flex;gap:8px;margin:0 0 12px}
+  .tab{flex:1;padding:9px 10px;font-size:14.5px;font-weight:600;border-radius:11px}
+  .tab:hover:not(.active){background:var(--note-bg)}
+  .tab.active{background:linear-gradient(135deg, var(--blue2), var(--blue));border-color:transparent;color:#fff;
+       box-shadow:0 6px 14px -8px rgba(37,99,235,.5)}
+  .tab .badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:999px;
+       background:rgba(239,68,68,.15);color:var(--red-deep);font-size:12px;font-weight:700}
+  .tab.active .badge{background:rgba(255,255,255,.25);color:#fff}
+
   .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:8px 0}
   .row label{font-size:13.5px;color:var(--sub)}
+  .group{display:flex;align-items:center;gap:6px;transition:opacity .2s}
+  .group.dim{opacity:.45;pointer-events:none}  /* 错题页不使用调性 */
   select{appearance:none;-webkit-appearance:none;padding:6px 30px 6px 10px;
        border:1px solid var(--line);border-radius:10px;background-color:var(--card);color:var(--text);
        font-size:14px;cursor:pointer;
@@ -72,6 +84,12 @@
        box-shadow:0 8px 18px -8px rgba(37,99,235,.55)}
   .primary:hover{transform:translateY(-1px);filter:brightness(1.06)}
   .primary:active{transform:translateY(0);background:linear-gradient(135deg, var(--blue), var(--blue-deep))}
+
+  /* 错题一览 */
+  .mistake-list{margin:0 0 10px;padding:8px 12px;border-radius:10px;background:var(--note-bg);
+       color:var(--sub);font-size:13px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .mistake-list .tag{padding:1px 8px;border-radius:999px;background:rgba(239,68,68,.13);
+       color:var(--red-deep);font-weight:600;font-size:12px}
 
   /* 音名按钮做成琴键: 带升降号的音是黑键 */
   .notes{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin:12px 0}
@@ -123,23 +141,41 @@
   <div class="sub">听音辨名 · 绝对音感训练</div>
   <div class="header-rule"></div>
 
+  <nav class="tabs">
+    <button class="tab active" data-view="practice" type="button">🎹 日常练习</button>
+    <button class="tab" data-view="mistakes" type="button">🎯 错题练习 <span class="badge" id="mistakeBadge" hidden>0</span></button>
+  </nav>
+
   <div class="row">
-    <label>调性</label><select id="scaleBox"></select>
+    <span class="group" id="scaleGroup"><label>调性</label><select id="scaleBox"></select></span>
     <label>八度</label><select id="octaveBox"></select>
     <label>题数</label><select id="sizeBox"></select>
     <span class="check"><input type="checkbox" id="autoNext" checked><label for="autoNext">自动下一题</label></span>
   </div>
 
-  <div class="row">
-    <button class="primary" id="playBtn">▶  开始练习</button>
-    <button id="prevBtn">⏮ 上一题</button>
-    <button id="nextBtn">⏭ 下一题</button>
-    <button id="mistakeBtn">🎯 错题</button>
-    <button id="revealBtn">🙈 看答案</button>
-  </div>
+  <section id="p-view">
+    <div class="row">
+      <button class="primary" id="p-play">▶  开始练习</button>
+      <button id="p-prev">⏮ 上一题</button>
+      <button id="p-next">⏭ 下一题</button>
+      <button id="p-reveal">🙈 看答案</button>
+    </div>
+    <div class="notes" id="p-notes"></div>
+    <div class="feedback" id="p-feedback">选好调性、八度和题数，点「开始练习」🎧</div>
+  </section>
 
-  <div class="notes" id="noteGrid"></div>
-  <div class="feedback" id="feedback">选好调性、八度和题数，点「开始练习」🎧</div>
+  <section id="m-view" hidden>
+    <div class="mistake-list">错题集：<span id="mistakeChips">（空）</span></div>
+    <div class="row">
+      <button class="primary" id="m-play">▶  开始错题练习</button>
+      <button id="m-prev">⏮ 上一题</button>
+      <button id="m-next">⏭ 下一题</button>
+      <button id="m-reveal">🙈 看答案</button>
+    </div>
+    <div class="notes" id="m-notes"></div>
+    <div class="feedback" id="m-feedback">错题集是空的；在「日常练习」里答错、跳过或看答案的音会自动收进来</div>
+  </section>
+
   <div class="stats" id="stats"></div>
   <div class="bottom">
     <div class="chips" id="chips"></div>
@@ -178,16 +214,10 @@ const SOLFEGE = {C:"do", D:"re", E:"mi", F:"fa", G:"sol", A:"la", B:"si"};
 const GREEN = "#15803d", RED = "#b91c1c", GRAY = "#6b7280", DARK = "#374151";
 
 const $ = id => document.getElementById(id);
-const el = {
-  scaleBox: $("scaleBox"), octaveBox: $("octaveBox"), sizeBox: $("sizeBox"),
-  autoNext: $("autoNext"), playBtn: $("playBtn"), prevBtn: $("prevBtn"),
-  nextBtn: $("nextBtn"), mistakeBtn: $("mistakeBtn"), revealBtn: $("revealBtn"),
-  noteGrid: $("noteGrid"), feedback: $("feedback"), stats: $("stats"),
-  chips: $("chips"), progress: $("progress"),
-};
+const settings = { scale: $("scaleBox"), octave: $("octaveBox"), size: $("sizeBox"), autoNext: $("autoNext") };
 
-const state = {
-  questions: [], results: [], qIndex: 0, sessionActive: false,
+// ---- 全局共享: 统计 + 错题集(localStorage, 与桌面版相互独立) ----
+const shared = {
   attempts: 0, correct: 0, streak: 0, bestStreak: 0, history: [],
   mistakes: loadMistakes(),
 };
@@ -196,9 +226,13 @@ function loadMistakes(){
   try { return JSON.parse(localStorage.getItem("mistakes") || "{}"); }
   catch { return {}; }
 }
-function saveMistakes(){ localStorage.setItem("mistakes", JSON.stringify(state.mistakes)); }
+function saveMistakes(){ localStorage.setItem("mistakes", JSON.stringify(shared.mistakes)); }
+function mistakeNames(){
+  return Object.keys(shared.mistakes).map(Number).sort((a, b) => a - b)
+    .map(pc => shared.mistakes[pc].name);
+}
 
-// ---- 乐理(音名都来自 SCALES, 只需算音高; 与桌面版 parse_note_name 同源的轻量版) ----
+// ---- 乐理(音名都来自 SCALES 或错题集, 只需算音高) ----
 function pcOf(name){
   const sign = name.includes("#") ? 1 : -1;
   return (PC[name[0]] + sign * (name.length - 1) + 12) % 12;
@@ -206,10 +240,8 @@ function pcOf(name){
 function midiOf(name, octave){ return (octave + 1) * 12 + pcOf(name); }
 function display(name){ return name.replace(/#/g, "♯").replace(/b/g, "♭"); }
 function solfege(name){ return SOLFEGE[name[0]] + display(name.slice(1)); }
-function expected(){ return state.questions[state.qIndex]; }
-function shownNote(){ return display(expected().name) + (Math.floor(expected().midi / 12) - 1); }
 function selectedOctave(){
-  const value = el.octaveBox.value;
+  const value = settings.octave.value;
   return value === "随机" ? 1 + Math.floor(Math.random() * 6) : Number(value);
 }
 
@@ -300,7 +332,7 @@ function playNote(midi){
     current = src;
     src.start();
   } catch (err){
-    setFeedback(`播放失败：${err.message}`, RED);
+    setFeedback(active, `播放失败：${err.message}`, RED);
   }
 }
 
@@ -310,30 +342,47 @@ async function preload(){  // 后台合成全部音源(让出主线程, 不卡�
     for (let pc = 0; pc < 12; pc++) midis.push((octave + 1) * 12 + pc);
   for (let i = 0; i < midis.length; i++){
     preloadSample(midis[i]);
-    el.progress.textContent = `音源准备中 ${i + 1}/${midis.length}`;
+    $("progress").textContent = `音源准备中 ${i + 1}/${midis.length}`;
     if (i % 3 === 2) await new Promise(resolve => setTimeout(resolve, 0));
   }
-  el.progress.textContent = "";
+  $("progress").textContent = "";
 }
 
-// ---- 练习会话(逻辑与桌面版一一对应) ----
-let autoTimer = null;
-function cancelAutoNext(){ if (autoTimer){ clearTimeout(autoTimer); autoTimer = null; } }
+// ---- 两个练习页面: 各自独立的一组题, 随时切换, 统计与错题集共享 ----
+function makeView(prefix, pool){
+  return {
+    pool,  // () => 出题音名数组
+    questions: [], results: [], qIndex: 0, sessionActive: false, autoTimer: null,
+    el: {
+      root: $(`${prefix}-view`), play: $(`${prefix}-play`), prev: $(`${prefix}-prev`),
+      next: $(`${prefix}-next`), reveal: $(`${prefix}-reveal`),
+      notes: $(`${prefix}-notes`), feedback: $(`${prefix}-feedback`),
+    },
+  };
+}
+const views = {
+  practice: makeView("p", () => SCALES[settings.scale.value]),
+  mistakes: makeView("m", () => mistakeNames()),
+};
+let active = views.practice;
 
-function startSession(fromMistakes){
-  cancelAutoNext();
-  let names;
-  if (fromMistakes){
-    names = Object.keys(state.mistakes).map(Number).sort((a, b) => a - b)
-      .map(pc => state.mistakes[pc].name);
-    if (!names.length){
-      setFeedback("错题集是空的；答错、跳过或看答案的音会自动收进来", GRAY);
-      return;
-    }
-  } else {
-    names = SCALES[el.scaleBox.value];
+function expected(view){ return view.questions[view.qIndex]; }
+function shownNote(view){
+  const q = expected(view);
+  return display(q.name) + (Math.floor(q.midi / 12) - 1);
+}
+function cancelAutoNext(view){
+  if (view.autoTimer){ clearTimeout(view.autoTimer); view.autoTimer = null; }
+}
+
+function startSession(view){
+  cancelAutoNext(view);
+  const names = view.pool();
+  if (!names.length){
+    setFeedback(view, "错题集是空的；在「日常练习」里答错、跳过或看答案的音会自动收进来", GRAY);
+    return;
   }
-  const count = Number(el.sizeBox.value);
+  const count = Number(settings.size.value);
   const questions = [];
   let previous = null;
   for (let i = 0; i < count; i++){
@@ -342,104 +391,133 @@ function startSession(fromMistakes){
     previous = pick[Math.floor(Math.random() * pick.length)];
     questions.push({name: previous, midi: midiOf(previous, selectedOctave())});
   }
-  state.questions = questions;
-  state.results = Array(count).fill(null);
-  state.qIndex = 0;
-  state.sessionActive = true;
-  renderNoteButtons(names);
-  enterQuestion(0);
+  view.questions = questions;
+  view.results = Array(count).fill(null);
+  view.qIndex = 0;
+  view.sessionActive = true;
+  renderNoteButtons(view, names);
+  enterQuestion(view, 0);
 }
 
-function enterQuestion(index){
-  state.qIndex = index;
-  const {midi} = expected();
-  for (const btn of el.noteGrid.children) btn.classList.remove("ok", "bad");
-  setPlayButton("🔁  重听", replay);
-  const recorded = state.results[index];
+function enterQuestion(view, index, silent = false){
+  view.qIndex = index;
+  const {midi} = expected(view);
+  for (const btn of view.el.notes.children) btn.classList.remove("ok", "bad");
+  setPlayButton(view, "🔁  重听", () => replay(view));
+  const recorded = view.results[index];
   if (recorded === null){
-    setFeedback(`仔细听……第 ${index + 1}/${state.questions.length} 题，这是什么音？`, DARK);
+    setFeedback(view, `仔细听……第 ${index + 1}/${view.questions.length} 题，这是什么音？`, DARK);
   } else {
-    applyResultColors(recorded.ok, recorded.clicked);
-    setFeedback(recorded.message, recorded.ok ? GREEN : RED);
+    applyResultColors(view, recorded.ok, recorded.clicked);
+    setFeedback(view, recorded.message, recorded.ok ? GREEN : RED);
   }
-  playNote(midi);
+  if (!silent) playNote(midi);
   renderStats();
 }
 
-function replay(){
-  if (!state.sessionActive){ setFeedback("还没有题目，点「开始练习」", GRAY); return; }
-  playNote(expected().midi);
+function renderCurrent(view){  // 切回页面时刷新显示, 不发声
+  if (view.sessionActive) enterQuestion(view, view.qIndex, true);
+  else renderIdle(view);
 }
 
-function prevQuestion(){
-  if (!state.sessionActive){ setFeedback("还没有题目，点「开始练习」", GRAY); return; }
-  cancelAutoNext();
-  if (state.qIndex === 0){ setFeedback("已经是第一题了", GRAY); return; }
-  enterQuestion(state.qIndex - 1);
+function renderIdle(view){
+  setPlayButton(view, view === views.practice ? "▶  开始练习" : "▶  开始错题练习",
+    () => startSession(view));
+  if (view === views.practice){
+    setFeedback(view, "选好调性、八度和题数，点「开始练习」🎧", GRAY);
+  } else if (!Object.keys(shared.mistakes).length){
+    setFeedback(view, "错题集是空的；在「日常练习」里答错、跳过或看答案的音会自动收进来", GRAY);
+  } else {
+    setFeedback(view, `错题集共 ${Object.keys(shared.mistakes).length} 个音，点「开始错题练习」🎯`, GRAY);
+  }
 }
 
-function nextQuestion(){
-  if (!state.sessionActive){ setFeedback("还没有题目，点「开始练习」", GRAY); return; }
-  cancelAutoNext();
-  if (state.results[state.qIndex] === null){ forfeit("⏭ 已跳过，正确答案"); return; }
-  if (state.qIndex + 1 >= state.questions.length){ showSummary(); return; }
-  enterQuestion(state.qIndex + 1);
-}
-
-function answer(name){
-  if (!state.sessionActive || state.results[state.qIndex] !== null){
-    setFeedback("这题已经作答过了，点「下一题」继续", GRAY);
+function replay(view){
+  if (!view.sessionActive){
+    setFeedback(view, "还没有题目，先点上方「开始」按钮", GRAY);
     return;
   }
-  if (pcOf(name) === expected().midi % 12){
-    state.correct++; state.streak++;
-    state.bestStreak = Math.max(state.bestStreak, state.streak);
-    let message = `✅ 正确！是 ${shownNote()}（唱名 ${solfege(expected().name)}）`;
-    if (state.streak >= 3) message += `　🔥 连对 ${state.streak}`;
-    const expectedPc = expected().midi % 12;
-    if (expectedPc in state.mistakes){
-      delete state.mistakes[expectedPc];
-      saveMistakes(); updateMistakeButton();
+  playNote(expected(view).midi);
+}
+
+function prevQuestion(view){
+  if (!view.sessionActive){
+    setFeedback(view, "还没有题目，先点上方「开始」按钮", GRAY);
+    return;
+  }
+  cancelAutoNext(view);
+  if (view.qIndex === 0){
+    setFeedback(view, "已经是第一题了", GRAY);
+    return;
+  }
+  enterQuestion(view, view.qIndex - 1);
+}
+
+function nextQuestion(view){
+  if (!view.sessionActive){
+    setFeedback(view, "还没有题目，先点上方「开始」按钮", GRAY);
+    return;
+  }
+  cancelAutoNext(view);
+  if (view.results[view.qIndex] === null){ forfeit(view, "⏭ 已跳过，正确答案"); return; }
+  if (view.qIndex + 1 >= view.questions.length){ showSummary(view); return; }
+  enterQuestion(view, view.qIndex + 1);
+}
+
+function answer(view, name){
+  if (!view.sessionActive || view.results[view.qIndex] !== null){
+    setFeedback(view, "这题已经作答过了，点「下一题」继续", GRAY);
+    return;
+  }
+  if (pcOf(name) === expected(view).midi % 12){
+    shared.correct++; shared.streak++;
+    shared.bestStreak = Math.max(shared.bestStreak, shared.streak);
+    let message = `✅ 正确！是 ${shownNote(view)}（唱名 ${solfege(expected(view).name)}）`;
+    if (shared.streak >= 3) message += `　🔥 连对 ${shared.streak}`;
+    const expectedPc = expected(view).midi % 12;
+    if (expectedPc in shared.mistakes){
+      delete shared.mistakes[expectedPc];
+      saveMistakes(); updateMistakeUI();
       message += "　🎉 已移出错题集";
     }
-    state.results[state.qIndex] = {ok: true, clicked: name, message};
-    applyResultColors(true, name);
-    finish(true, message, GREEN);
-    if (el.autoNext.checked) autoTimer = setTimeout(nextQuestion, 900);
+    view.results[view.qIndex] = {ok: true, clicked: name, message};
+    applyResultColors(view, true, name);
+    finish(view, true, message, GREEN);
+    if (settings.autoNext.checked) view.autoTimer = setTimeout(() => nextQuestion(view), 900);
   } else {
-    const message = `❌ 不是 ${display(name)}，正确答案是 ${shownNote()}`
-      + `（唱名 ${solfege(expected().name)}）。点「重听」加深印象 🎧`;
-    addMistake();
-    state.results[state.qIndex] = {ok: false, clicked: name, message};
-    applyResultColors(false, name);
-    finish(false, message, RED);
-    if (el.autoNext.checked) autoTimer = setTimeout(nextQuestion, 1400);  // 答错也自动下一题
+    const message = `❌ 不是 ${display(name)}，正确答案是 ${shownNote(view)}`
+      + `（唱名 ${solfege(expected(view).name)}）。点「重听」加深印象 🎧`;
+    addMistake(view);
+    view.results[view.qIndex] = {ok: false, clicked: name, message};
+    applyResultColors(view, false, name);
+    finish(view, false, message, RED);
+    if (settings.autoNext.checked) view.autoTimer = setTimeout(() => nextQuestion(view), 1400);  // 答错也自动下一题
   }
 }
 
-function revealAnswer(){
-  if (!state.sessionActive || state.results[state.qIndex] !== null){
-    setFeedback("这题已经作答过了，点「下一题」继续", GRAY);
+function revealAnswer(view){
+  if (!view.sessionActive || view.results[view.qIndex] !== null){
+    setFeedback(view, "这题已经作答过了，点「下一题」继续", GRAY);
     return;
   }
-  forfeit("🙈 答案");
+  forfeit(view, "🙈 答案");
 }
 
-function forfeit(prefix){
-  const message = `${prefix}是 ${shownNote()}（唱名 ${solfege(expected().name)}），下一题加油`;
-  addMistake();
-  state.results[state.qIndex] = {ok: false, clicked: null, message};
-  applyResultColors(false, null);
-  finish(false, message, GRAY);
-  if (el.autoNext.checked) autoTimer = setTimeout(nextQuestion, 1400);
+function forfeit(view, prefix){
+  const message = `${prefix}是 ${shownNote(view)}（唱名 ${solfege(expected(view).name)}），下一题加油`;
+  addMistake(view);
+  view.results[view.qIndex] = {ok: false, clicked: null, message};
+  applyResultColors(view, false, null);
+  finish(view, false, message, GRAY);
+  if (settings.autoNext.checked) view.autoTimer = setTimeout(() => nextQuestion(view), 1400);
 }
 
-function showSummary(){
-  state.sessionActive = false;
-  cancelAutoNext();
-  const total = state.questions.length;
-  const right = state.questions.filter((q, i) => state.results[i].ok).map(q => q.name);
-  const wrong = state.questions.filter((q, i) => !state.results[i].ok).map(q => q.name);
+function showSummary(view){
+  view.sessionActive = false;
+  cancelAutoNext(view);
+  const total = view.questions.length;
+  const right = view.questions.filter((q, i) => view.results[i].ok).map(q => q.name);
+  const wrong = view.questions.filter((q, i) => !view.results[i].ok).map(q => q.name);
   const lines = [`🎉 练习完成！本轮 ${total} 题答对 ${right.length} 题（${Math.round(100 * right.length / total)}%）`];
   if (right.length) lines.push("✅ 答对：" + [...new Set(right)].map(display).join("、"));
   if (wrong.length){
@@ -447,107 +525,153 @@ function showSummary(){
       const c = wrong.filter(x => x === n).length;
       return c > 1 ? `${display(n)}×${c}` : display(n);
     });
-    lines.push(`❌ 答错：${parts.join("、")}（可点「错题」巩固）`);
+    lines.push(`❌ 答错：${parts.join("、")}（去「错题练习」巩固）`);
   } else {
     lines.push("全部答对，太棒了！");
   }
-  setFeedback(lines.join("\n"), DARK);
-  setPlayButton("▶  再来一组", () => startSession(false));
+  setFeedback(view, lines.join("\n"), DARK);
+  setPlayButton(view, "▶  再来一组", () => startSession(view));
   renderStats();
 }
 
-// ---- 记分与错题 ----
-function finish(ok, message, color){
-  state.attempts++;
-  if (!ok) state.streak = 0;
-  state.history.push([shownNote(), ok]);
-  if (state.history.length > 12) state.history = state.history.slice(-12);
-  setFeedback(message, color);
+// ---- 记分与错题(两个页面共享) ----
+function finish(view, ok, message, color){
+  shared.attempts++;
+  if (!ok) shared.streak = 0;
+  shared.history.push([shownNote(view), ok]);
+  if (shared.history.length > 12) shared.history = shared.history.slice(-12);
+  setFeedback(view, message, color);
   renderStats();
   renderChips();
 }
 
-function addMistake(){
-  const pc = expected().midi % 12;
-  const item = state.mistakes[pc] || {name: expected().name, count: 0};
-  state.mistakes[pc] = {name: item.name, count: item.count + 1};
+function addMistake(view){
+  const pc = expected(view).midi % 12;
+  const item = shared.mistakes[pc] || {name: expected(view).name, count: 0};
+  shared.mistakes[pc] = {name: item.name, count: item.count + 1};
   saveMistakes();
-  updateMistakeButton();
+  updateMistakeUI();
 }
 
-function applyResultColors(ok, clicked){
-  const right = noteButton(expected().name);
+function applyResultColors(view, ok, clicked){
+  const right = noteButton(view, expected(view).name);
   if (right) right.classList.add("ok");
-  if (!ok && clicked && clicked !== expected().name){
-    const wrong = noteButton(clicked);
+  if (!ok && clicked && clicked !== expected(view).name){
+    const wrong = noteButton(view, clicked);
     if (wrong) wrong.classList.add("bad");
   }
 }
-function noteButton(name){
-  for (const btn of el.noteGrid.children) if (btn.dataset.name === name) return btn;
+function noteButton(view, name){
+  for (const btn of view.el.notes.children) if (btn.dataset.name === name) return btn;
   return null;
 }
 
 // ---- 界面渲染 ----
 // 反馈配色走 data-tone(CSS 变量, 自动适配深色模式), 不再用内联颜色
 const FEEDBACK_TONE = {"#15803d": "good", "#b91c1c": "bad", "#6b7280": "idle", "#374151": "info"};
-function setFeedback(text, color){
-  el.feedback.textContent = text;
-  el.feedback.dataset.tone = FEEDBACK_TONE[color] || "idle";
-  el.feedback.animate([{opacity: 0.25}, {opacity: 1}], {duration: 180, easing: "ease-out"});
+function setFeedback(view, text, color){
+  view.el.feedback.textContent = text;
+  view.el.feedback.dataset.tone = FEEDBACK_TONE[color] || "idle";
+  if (view === active){
+    view.el.feedback.animate([{opacity: 0.25}, {opacity: 1}], {duration: 180, easing: "ease-out"});
+  }
 }
 
-function setPlayButton(text, handler){ el.playBtn.textContent = text; el.playBtn.onclick = handler; }
+function setPlayButton(view, text, handler){ view.el.play.textContent = text; view.el.play.onclick = handler; }
 
-function renderNoteButtons(names){
-  names = names || SCALES[el.scaleBox.value];
-  el.noteGrid.textContent = "";
+function renderNoteButtons(view, names){
+  names = names || view.pool();
+  view.el.notes.textContent = "";
   for (const name of names){
     const btn = document.createElement("button");
     btn.textContent = display(name);
     btn.dataset.name = name;
-    btn.onclick = () => answer(name);
-    el.noteGrid.appendChild(btn);
+    btn.onclick = () => answer(view, name);
+    view.el.notes.appendChild(btn);
   }
 }
 
-function updateMistakeButton(){
-  const count = Object.keys(state.mistakes).length;
-  el.mistakeBtn.textContent = `🎯 错题 (${count})`;
-  el.mistakeBtn.disabled = !count;
+function updateMistakeUI(){
+  const entries = Object.entries(shared.mistakes).sort((a, b) => a[0] - b[0]);
+  const badge = $("mistakeBadge");
+  badge.textContent = entries.length;
+  badge.hidden = !entries.length;
+  const chips = $("mistakeChips");
+  chips.textContent = "";
+  if (!entries.length){
+    chips.textContent = "（空）";
+  } else {
+    for (const [, item] of entries){
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = item.count > 1 ? `${display(item.name)}×${item.count}` : display(item.name);
+      chips.appendChild(tag);
+    }
+  }
+  if (!views.mistakes.sessionActive && views.mistakes === active) renderIdle(views.mistakes);
 }
 
 function renderStats(){
-  const head = state.sessionActive ? `第 ${state.qIndex + 1}/${state.questions.length} 题 · ` : "";
-  const acc = state.attempts ? Math.round(100 * state.correct / state.attempts) : 0;
-  el.stats.textContent = `${head}已答 ${state.attempts} · 正确 ${state.correct} · 准确率 ${acc}% `
-    + `· 连对 ${state.streak}（最佳 ${state.bestStreak}）`;
+  const head = active.sessionActive
+    ? `第 ${active.qIndex + 1}/${active.questions.length} 题 · ` : "";
+  const acc = shared.attempts ? Math.round(100 * shared.correct / shared.attempts) : 0;
+  $("stats").textContent = `${head}已答 ${shared.attempts} · 正确 ${shared.correct} · 准确率 ${acc}% `
+    + `· 连对 ${shared.streak}（最佳 ${shared.bestStreak}）`;
 }
 
 function renderChips(){
-  el.chips.textContent = "";
-  for (const [text, ok] of state.history){
+  const chips = $("chips");
+  chips.textContent = "";
+  for (const [text, ok] of shared.history){
     const span = document.createElement("span");
     span.className = ok ? "ok" : "bad";
     span.textContent = `${text} ${ok ? "✓" : "✗"}`;
-    el.chips.appendChild(span);
+    chips.appendChild(span);
   }
 }
 
-function onSettingsChange(){
-  cancelAutoNext();
-  state.sessionActive = false;  // 切换调性/八度会作废进行中的一组
-  renderNoteButtons();
-  setPlayButton("▶  开始练习", () => startSession(false));
-  setFeedback(`已切换：${el.scaleBox.value} · 八度 ${el.octaveBox.value}，点「开始练习」开始`, GRAY);
+// ---- 页面切换与设置 ----
+function switchView(name){
+  const view = views[name];
+  if (view === active) return;
+  cancelAutoNext(active);  // 暂停离开页面的自动下一题, 会话本身保留
+  active = view;
+  for (const tab of document.querySelectorAll(".tab")){
+    tab.classList.toggle("active", tab.dataset.view === name);
+  }
+  views.practice.el.root.hidden = name !== "practice";
+  views.mistakes.el.root.hidden = name !== "mistakes";
+  $("scaleGroup").classList.toggle("dim", name === "mistakes");  // 错题练习不使用调性
+  renderCurrent(view);
   renderStats();
 }
 
+function invalidate(view){  // 作废进行中的一组
+  cancelAutoNext(view);
+  view.sessionActive = false;
+  if (view === views.practice) renderNoteButtons(views.practice);
+  if (view === active) renderIdle(view);
+}
+
+settings.scale.onchange = () => {
+  invalidate(views.practice);  // 错题练习不受调性影响
+  if (active === views.practice){
+    setFeedback(views.practice,
+      `已切换：${settings.scale.value} · 八度 ${settings.octave.value}，点「开始练习」开始`, GRAY);
+  }
+};
+settings.octave.onchange = () => {
+  invalidate(views.practice);
+  invalidate(views.mistakes);
+  const message = `八度已切换为 ${settings.octave.value}，重新开始一组吧`;
+  setFeedback(active, message, GRAY);
+};
+
 // ---- 初始化 ----
 for (const [box, values, initial] of [
-  [el.scaleBox, Object.keys(SCALES), "C大调"],
-  [el.octaveBox, OCTAVE_CHOICES, "4"],
-  [el.sizeBox, SESSION_CHOICES, "10"],
+  [settings.scale, Object.keys(SCALES), "C大调"],
+  [settings.octave, OCTAVE_CHOICES, "4"],
+  [settings.size, SESSION_CHOICES, "10"],
 ]){
   for (const v of values){
     const option = document.createElement("option");
@@ -556,23 +680,27 @@ for (const [box, values, initial] of [
   }
   box.value = initial;
 }
-for (const box of [el.scaleBox, el.octaveBox]) box.onchange = onSettingsChange;
 
-el.prevBtn.onclick = prevQuestion;
-el.nextBtn.onclick = nextQuestion;
-el.mistakeBtn.onclick = () => startSession(true);
-el.revealBtn.onclick = revealAnswer;
-setPlayButton("▶  开始练习", () => startSession(false));
+for (const tab of document.querySelectorAll(".tab")){
+  tab.onclick = () => switchView(tab.dataset.view);
+}
+for (const view of Object.values(views)){
+  view.el.prev.onclick = () => prevQuestion(view);
+  view.el.next.onclick = () => nextQuestion(view);
+  view.el.reveal.onclick = () => revealAnswer(view);
+  setPlayButton(view, view === views.practice ? "▶  开始练习" : "▶  开始错题练习", () => startSession(view));
+}
 
 document.addEventListener("keydown", e => {
   if (e.code !== "Space") return;
   if (["BUTTON", "SELECT", "INPUT"].includes(e.target.tagName)) return;  // 交给控件默认行为
   e.preventDefault();
-  state.sessionActive ? nextQuestion() : startSession(false);
+  active.sessionActive ? nextQuestion(active) : startSession(active);
 });
 
-updateMistakeButton();
-renderNoteButtons();
+updateMistakeUI();
+renderNoteButtons(views.practice);
+if (mistakeNames().length) renderNoteButtons(views.mistakes);  // 有错题时先亮出错题琴键
 renderStats();
 preload();
 </script>
