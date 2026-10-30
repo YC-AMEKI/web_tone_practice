@@ -4,43 +4,124 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="听音辨名 · 绝对音感训练小工具（纯浏览器运行，无需后端）">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Ctext%20y='.9em'%20font-size='90'%3E%F0%9F%8E%B9%3C/text%3E%3C/svg%3E">
 <title>音准练习 · 听音辨名</title>
 <style>
   :root{
-    --green:#15803d; --red:#b91c1c; --gray:#6b7280; --dark:#374151;
-    --note:#f3f4f6; --blue:#2563eb; --blue-active:#1d4ed8;
+    --blue:#2563eb; --blue2:#3b82f6; --blue-deep:#1d4ed8;
+    --green-deep:#15803d; --red-deep:#b91c1c;
+    --gray:#6b7280; --dark:#374151; --muted:#9ca3af; --sub:#6b7280; --text:#111827;
+    --bg1:#eef2f7; --bg2:#dfe7f1;
+    --card:#ffffff; --line:#e5e7eb;
+    --note-bg:#f3f4f6;
+    --key-white:#ffffff; --key-line:#e2e5ea; --key-black:#23272f; --key-black-text:#f9fafb;
+    --shadow:0 12px 32px -14px rgba(15,23,42,.2);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --green-deep:#4ade80; --red-deep:#f87171;
+      --gray:#94a3b8; --dark:#cbd5e1; --muted:#64748b; --sub:#94a3b8; --text:#e5eaf3;
+      --bg1:#0b1220; --bg2:#101a2d;
+      --card:#161f33; --line:#2a3550;
+      --note-bg:#1c2740;
+      --key-white:#1c2740; --key-line:#2c3852; --key-black:#0a0f1c; --key-black-text:#cbd5e1;
+      --shadow:0 12px 32px -14px rgba(0,0,0,.65);
+    }
   }
   *{box-sizing:border-box}
-  body{margin:0;padding:18px 12px;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
-       background:#f9fafb;color:#111827;display:flex;justify-content:center;min-height:100vh}
-  .app{width:100%;max-width:560px;background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.12);padding:16px 20px}
-  h1{margin:0;font-size:24px}
-  .sub{color:var(--gray);font-size:13px;margin:2px 0 10px}
-  .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
-  .row label{font-size:14px}
-  select{padding:4px 6px;border:1px solid #d1d5db;border-radius:6px;background:#fff;font-size:14px}
-  .check{display:flex;align-items:center;gap:4px;font-size:14px;margin-left:6px}
-  button{border:none;border-radius:8px;font-size:14px;cursor:pointer;padding:8px 12px;background:var(--note);color:var(--dark)}
+  body{margin:0;padding:26px 14px;min-height:100vh;min-height:100dvh;
+       font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+       -webkit-font-smoothing:antialiased;color:var(--text);display:flex;justify-content:center;
+       background:
+         radial-gradient(1100px 560px at 18% -8%, rgba(59,130,246,.13), transparent 60%),
+         radial-gradient(880px 460px at 100% 0%, rgba(34,197,94,.10), transparent 55%),
+         linear-gradient(160deg, var(--bg1), var(--bg2));}
+  .app{width:100%;max-width:600px;background:var(--card);border:1px solid var(--line);
+       border-radius:18px;box-shadow:var(--shadow);padding:22px 24px 16px}
+  h1{margin:0;font-size:26px;text-align:center;letter-spacing:.5px}
+  .sub{text-align:center;color:var(--sub);font-size:13px;margin:4px 0 12px}
+  .header-rule{height:3px;width:58px;margin:0 auto 14px;border-radius:2px;
+       background:linear-gradient(90deg, var(--blue), #22c55e)}
+
+  .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:8px 0}
+  .row label{font-size:13.5px;color:var(--sub)}
+  select{appearance:none;-webkit-appearance:none;padding:6px 30px 6px 10px;
+       border:1px solid var(--line);border-radius:10px;background-color:var(--card);color:var(--text);
+       font-size:14px;cursor:pointer;
+       background-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23888d97'%20stroke-width='2.5'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='m6%209%206%206%206-6'/%3E%3C/svg%3E");
+       background-repeat:no-repeat;background-position:right 9px center;background-size:13px;
+       transition:border-color .15s}
+  select:hover{border-color:var(--muted)}
+  select:focus-visible{outline:2px solid var(--blue2);outline-offset:1px}
+  .check{display:flex;align-items:center;gap:8px;margin-left:auto;font-size:13.5px;color:var(--sub);cursor:pointer}
+  .check input{appearance:none;-webkit-appearance:none;width:36px;height:20px;border-radius:999px;
+       background:var(--line);position:relative;cursor:pointer;margin:0;transition:background .2s}
+  .check input::before{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+       background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
+  .check input:checked{background:var(--blue)}
+  .check input:checked::before{transform:translateX(16px)}
+
+  button{border:1px solid var(--line);border-radius:10px;font-size:14px;cursor:pointer;
+       padding:9px 13px;background:var(--card);color:var(--text);
+       transition:transform .12s ease, background-color .15s ease, box-shadow .15s ease, filter .15s ease}
+  button:focus-visible{outline:2px solid var(--blue2);outline-offset:2px}
   button:disabled{opacity:.45;cursor:default}
-  .primary{flex:1;background:var(--blue);color:#fff;font-size:16px;font-weight:700;padding:10px 16px}
-  .primary:active{background:var(--blue-active)}
-  .notes{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:10px 0}
-  .notes button{font-size:15px;font-weight:700;padding:9px 0}
-  .notes button.ok{background:var(--green);color:#fff}
-  .notes button.bad{background:var(--red);color:#fff}
-  .feedback{min-height:46px;text-align:center;font-size:14.5px;white-space:pre-line;margin:8px 0 2px}
-  .stats{color:var(--gray);font-size:13px;text-align:center}
-  .bottom{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px}
-  .chips{display:flex;flex-wrap:wrap;gap:4px;font-size:12.5px}
-  .chips .ok{color:var(--green)} .chips .bad{color:var(--red)}
-  .progress{color:var(--gray);font-size:12.5px;white-space:nowrap}
-  .hint{color:#9ca3af;font-size:12.5px;text-align:center;margin:10px 0 2px}
+  .row button:not(.primary):not(:disabled):hover{background:var(--note-bg);transform:translateY(-1px)}
+  .primary{flex:1;border-color:transparent;color:#fff;font-size:16px;font-weight:700;padding:11px 16px;
+       background:linear-gradient(135deg, var(--blue2), var(--blue));
+       box-shadow:0 8px 18px -8px rgba(37,99,235,.55)}
+  .primary:hover{transform:translateY(-1px);filter:brightness(1.06)}
+  .primary:active{transform:translateY(0);background:linear-gradient(135deg, var(--blue), var(--blue-deep))}
+
+  /* 音名按钮做成琴键: 带升降号的音是黑键 */
+  .notes{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin:12px 0}
+  .notes button{font-size:15px;font-weight:700;padding:12px 0;border-color:var(--key-line);
+       background:var(--key-white);box-shadow:0 2px 6px -2px rgba(15,23,42,.14)}
+  .notes button[data-name$="#"], .notes button[data-name$="b"]{
+       background:var(--key-black);color:var(--key-black-text);border-color:var(--key-black)}
+  .notes button:hover:not(:disabled):not(.ok):not(.bad){
+       transform:translateY(-2px);box-shadow:0 7px 14px -6px rgba(15,23,42,.3)}
+  .notes button.ok{background:linear-gradient(160deg, #34d399, #15803d);border-color:transparent;
+       color:#fff;animation:pop .28s ease-out}
+  .notes button.bad{background:linear-gradient(160deg, #f87171, #b91c1c);border-color:transparent;
+       color:#fff;animation:shake .35s ease-out}
+  @keyframes pop{0%{transform:scale(.92)}55%{transform:scale(1.07)}100%{transform:scale(1)}}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}55%{transform:translateX(4px)}80%{transform:translateX(-2px)}}
+
+  .feedback{min-height:54px;display:flex;align-items:center;justify-content:center;text-align:center;
+       font-size:15px;line-height:1.55;white-space:pre-line;margin:10px 0 4px;padding:10px 14px;
+       border-radius:12px;background:var(--note-bg);color:var(--sub)}
+  .feedback[data-tone="good"]{color:var(--green-deep)}
+  .feedback[data-tone="bad"]{color:var(--red-deep)}
+  .feedback[data-tone="info"]{color:var(--dark)}
+  .stats{color:var(--sub);font-size:13px;text-align:center;font-variant-numeric:tabular-nums;margin:2px 0}
+
+  .bottom{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;font-size:12px}
+  .chips span{padding:2px 9px;border-radius:999px;font-weight:600}
+  .chips .ok{color:var(--green-deep);background:rgba(34,197,94,.13)}
+  .chips .bad{color:var(--red-deep);background:rgba(239,68,68,.13)}
+  .progress{color:var(--sub);font-size:12px;white-space:nowrap}
+  .progress:not(:empty)::before{content:"⏳ "}
+  .hint{color:var(--muted);font-size:12px;text-align:center;margin:12px 0 2px;padding-top:10px;
+       border-top:1px dashed var(--line)}
+
+  @media (max-width:480px){
+    .app{padding:16px 14px;border-radius:14px}
+    h1{font-size:21px}
+    .notes{grid-template-columns:repeat(4,1fr)}
+    .primary{flex-basis:100%}
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none!important;transition:none!important}
+  }
 </style>
 </head>
 <body>
 <div class="app">
   <h1>🎹 音准练习</h1>
   <div class="sub">听音辨名 · 绝对音感训练</div>
+  <div class="header-rule"></div>
 
   <div class="row">
     <label>调性</label><select id="scaleBox"></select>
@@ -408,7 +489,13 @@ function noteButton(name){
 }
 
 // ---- 界面渲染 ----
-function setFeedback(text, color){ el.feedback.textContent = text; el.feedback.style.color = color; }
+// 反馈配色走 data-tone(CSS 变量, 自动适配深色模式), 不再用内联颜色
+const FEEDBACK_TONE = {"#15803d": "good", "#b91c1c": "bad", "#6b7280": "idle", "#374151": "info"};
+function setFeedback(text, color){
+  el.feedback.textContent = text;
+  el.feedback.dataset.tone = FEEDBACK_TONE[color] || "idle";
+  el.feedback.animate([{opacity: 0.25}, {opacity: 1}], {duration: 180, easing: "ease-out"});
+}
 
 function setPlayButton(text, handler){ el.playBtn.textContent = text; el.playBtn.onclick = handler; }
 
