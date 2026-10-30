@@ -8,8 +8,8 @@
 
 玩法: 选好「调性 + 八度 + 题数」→ 点「开始练习」→ 听音点击音名作答, 答对答错都自动进入下一题;
       一组结束统计本轮答对/答错哪些音.
-错题: 答错、跳过或看答案的音自动进错题集(该音后续作答正确率达到 95% 即移出, 保存在用户主目录),
-      可随时专项练习; 错题练习只考当前调性音阶里错过的音, 选项仍列出整个音阶.
+错题: 答错、跳过或看答案的音自动进错题集(日常练习中该音正确率达到 95% 即移出, 保存在用户主目录),
+      可随时专项练习; 错题练习只考当前调性音阶里错过的音, 选项仍列出整个音阶, 不计入准确率.
 快捷键: 空格 = 下一题(没有进行中的练习时开始一组).
 """
 
@@ -728,7 +728,8 @@ class EarTrainer(tk.Tk):
     def _grade_mistake(self, ok: bool) -> str | None:
         """作答后更新错题集(按音高合并, 等音写法共用一条).
 
-        答错计入一条; 该音进入错题集后的作答正确率达到 95% 时移出,
+        答错计入一条; 准确率只统计日常练习中的作答(错题练习不计入),
+        进入错题集后的日常练习正确率达到 95% 时移出,
         返回给用户的提示文案(未移出时返回 None).
         """
         pc = self.expected_midi % 12
@@ -739,19 +740,22 @@ class EarTrainer(tk.Tk):
             name, count, tries, hits = self.expected_name, 0, 0, 0
         else:
             name, count, tries, hits = item
-        tries += 1
-        hits += 1 if ok else 0
-        count += 0 if ok else 1
-        rate = hits / tries
-        if rate >= 0.95:
+        if not ok:
+            count += 1
+        removed = False
+        if not self.mistake_session:  # 准确率只在日常练习中统计
+            tries += 1
+            hits += 1 if ok else 0
+            removed = hits / tries >= 0.95
+        if removed:
             del self.mistakes[pc]
-            message: str | None = f"正确率 {round(rate * 100)}%，已移出错题集"
         else:
             self.mistakes[pc] = (name, count, tries, hits)
-            message = None
         save_mistakes(self.mistakes_file, self.mistakes)
         self._update_mistake_button()
-        return message
+        if removed:
+            return f"正确率 {round(100 * hits / tries)}%，已移出错题集"
+        return None
 
     def _update_mistake_button(self) -> None:
         count = len(self.mistakes)

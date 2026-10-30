@@ -94,10 +94,14 @@ assert set(app.note_buttons) == set(tp.SCALES["G大调"])
 assert all(name in {"F#", "E", "G"} for name, _midi in app.questions)
 app.questions[0] = ("F#", 54)
 app._enter_question(0)
-app.answer("F#")  # 答对一次不再直接移出(正确率 1/2)
-assert 6 in app.mistakes and app.mistakes[6][2:] == (2, 1)
-for _ in range(18):  # 连续答对, 正确率达到 95% 才移出
-    app.results[app.q_index] = None
+app.answer("F#")  # 错题练习不计入准确率, 答对也不移出
+assert 6 in app.mistakes and app.mistakes[6][2:] == (1, 0)
+
+app.start_session()  # 准确率只在日常练习中统计: 连续答对 19 次 → 19/20 = 95% 移出
+for _ in range(19):
+    app.questions[0] = ("F#", 54)
+    app._enter_question(0)
+    app.results[0] = None
     app.answer("F#")
 assert 6 not in app.mistakes and len(app.mistakes) == 2
 assert "移出错题集" in app.feedback.cget("text")

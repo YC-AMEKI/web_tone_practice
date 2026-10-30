@@ -186,7 +186,7 @@
   </section>
 
   <section id="m-view" hidden>
-    <div class="mistake-list">错题集：<span id="mistakeChips">（空）</span></div>
+    <div class="mistake-list">错题集（隐去音名）：<span id="mistakeChips">（空）</span></div>
     <div class="row">
       <button class="primary playbtn" id="m-play">
         <svg class="ic ic-play" viewBox="0 0 24 24" aria-hidden="true"><polygon points="7 4 20 12 7 20" fill="currentColor"/></svg>
@@ -578,22 +578,29 @@ function finish(view, ok, message, color){
 
 function gradeMistake(view, ok){
   // 作答后更新错题集(按音高合并, 等音写法共用一条):
-  // 答错计入; 该音进入错题集后的作答正确率达到 95% 时移出, 返回提示文案
+  // 答错计入; 准确率只统计日常练习中的作答(错题练习不计入),
+  // 该音进入错题集后的日常练习正确率达到 95% 时移出, 返回提示文案
   const pc = expected(view).midi % 12;
   const item = shared.mistakes[pc];
   if (!item){
     if (ok) return null;
-    shared.mistakes[pc] = {name: expected(view).name, count: 1, tries: 1, hits: 0};
+    shared.mistakes[pc] = {
+      name: expected(view).name, count: 1,
+      tries: view === views.practice ? 1 : 0, hits: 0,
+    };
     saveMistakes(); updateMistakeUI();
     return null;
   }
-  item.tries++;
-  if (ok) item.hits++; else item.count++;
-  const rate = item.hits / item.tries;
+  if (!ok) item.count++;
   let removal = null;
-  if (rate >= 0.95){
-    removal = `正确率 ${Math.round(rate * 100)}%，已移出错题集`;
-    delete shared.mistakes[pc];
+  if (view === views.practice){  // 准确率只在日常练习中统计
+    item.tries++;
+    if (ok) item.hits++;
+    const rate = item.hits / item.tries;
+    if (rate >= 0.95){
+      removal = `正确率 ${Math.round(rate * 100)}%，已移出错题集`;
+      delete shared.mistakes[pc];
+    }
   }
   saveMistakes(); updateMistakeUI();
   return removal;
@@ -650,10 +657,11 @@ function updateMistakeUI(){
   if (!entries.length){
     chips.textContent = "（空）";
   } else {
+    // 不显示音名, 避免提前剧透; 圆点表示一个错音, ×n 为累计错次
     for (const [, item] of entries){
       const tag = document.createElement("span");
       tag.className = "tag";
-      tag.textContent = item.count > 1 ? `${display(item.name)}×${item.count}` : display(item.name);
+      tag.textContent = item.count > 1 ? `●×${item.count}` : "●";
       chips.appendChild(tag);
     }
   }
