@@ -8,7 +8,8 @@
 
 玩法: 选好「调性 + 八度 + 题数」→ 点「开始练习」→ 听音点击音名作答, 答对答错都自动进入下一题;
       一组结束统计本轮答对/答错哪些音.
-错题: 答错、跳过或看答案的音自动进错题集(答对一次即移出, 保存在用户主目录), 可随时专项练习.
+错题: 答错、跳过或看答案的音自动进错题集(该音后续作答正确率达到 95% 即移出, 保存在用户主目录),
+      可随时专项练习; 错题练习只考当前调性音阶里错过的音, 选项仍列出整个音阶.
 快捷键: 空格 = 下一题(没有进行中的练习时开始一组).
 """
 
@@ -315,24 +316,30 @@ def preload(voice: PianoVoice, midis: list[int], progress: queue.Queue) -> None:
 # ============ 错题集存取 ============
 
 
-def load_mistakes(path: Path) -> dict[int, tuple[str, int]]:
-    """读取错题集 {音高: (音名, 错误次数)}; 文件缺失或损坏时返回空集."""
+def load_mistakes(path: Path) -> dict[int, tuple[str, int, int, int]]:
+    """读取错题集 {音高: (音名, 错误次数, 作答次数, 答对次数)}; 文件缺失或损坏时返回空集."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    mistakes: dict[int, tuple[str, int]] = {}
+    mistakes: dict[int, tuple[str, int, int, int]] = {}
     for pc, item in data.items():
         try:
-            mistakes[int(pc)] = (str(item["name"]), int(item["count"]))
+            mistakes[int(pc)] = (
+                str(item["name"]),
+                int(item.get("count", 0)),
+                int(item.get("tries", 0)),  # 兼容旧版只有 name/count 的文件
+                int(item.get("hits", 0)),
+            )
         except (KeyError, TypeError, ValueError):
             continue
     return mistakes
 
 
-def save_mistakes(path: Path, mistakes: dict[int, tuple[str, int]]) -> None:
+def save_mistakes(path: Path, mistakes: dict[int, tuple[str, int, int, int]]) -> None:
     payload = {
-        str(pc): {"name": name, "count": count} for pc, (name, count) in mistakes.items()
+        str(pc): {"name": name, "count": count, "tries": tries, "hits": hits}
+        for pc, (name, count, tries, hits) in mistakes.items()
     }
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
@@ -525,12 +532,18 @@ class EarTrainer(tk.Tk):
         return int(value)
 
     def start_session(self, from_mistakes: bool = False) -> None:
-        """开始一组练习: 预生成整组题目; from_mistakes 时只考错题集里的音."""
+        """开始一组练习: 预生成整组题目; from_mistakes 时只考当前调性音阶里错过的音."""
         self._cancel_auto_next()
         if from_mistakes:
-            names = [name for _pc, (name, _n) in sorted(self.mistakes.items())]
-            if not names:
+            if not self.mistakes:
                 self._set_feedback("错题集是空的；答错、跳过或看答案的音会自动收进来", GRAY)
+                return
+            names = [
+                n for n in SCALES[self.scale_box.get()]
+                if parse_note_name(n)[0] in self.mistakes
+            ]
+            if not names:
+                self._set_feedback("当前调性的音阶里没有错题；可切换调性，或先做日常练习", GRAY)
                 return
         else:
             names = SCALES[self.scale_box.get()]
@@ -546,7 +559,7 @@ class EarTrainer(tk.Tk):
         self.q_index = 0
         self.session_active = True
         self.mistake_session = from_mistakes
-        self._render_answer_buttons(names)
+        self._render_answer_buttons()  # 选项与日常练习一致: 列出当前调性整个音阶
         self._enter_question(0)
 
     def _enter_question(self, index: int) -> None:
@@ -619,12 +632,9 @@ class EarTrainer(tk.Tk):
             message = f"✅ 正确！是 {shown}（唱名 {solfege(self.expected_name)}）"
             if self.streak >= 3:
                 message += f"　🔥 连对 {self.streak}"
-            expected_pc = self.expected_midi % 12
-            if expected_pc in self.mistakes:
-                del self.mistakes[expected_pc]
-                save_mistakes(self.mistakes_file, self.mistakes)
-                self._update_mistake_button()
-                message += "　🎉 已移出错题集"
+            removal = self._grade_mistake(True)
+            if removal:
+                message += f"　{removal}"
             self.results[self.q_index] = (True, name, message)
             self._apply_result_colors(True, name)
             self._finish(True, message, GREEN)
@@ -635,7 +645,7 @@ class EarTrainer(tk.Tk):
                 f"❌ 不是 {display_name(name)}，正确答案是 {shown}"
                 f"（唱名 {solfege(self.expected_name)}）。点「重听」加深印象 🎧"
             )
-            self._add_mistake()
+            self._grade_mistake(False)
             self.results[self.q_index] = (False, name, message)
             self._apply_result_colors(False, name)
             self._finish(False, message, RED)
@@ -655,7 +665,7 @@ class EarTrainer(tk.Tk):
             f"{prefix}是 {self._shown_note()}"
             f"（唱名 {solfege(self.expected_name)}），下一题加油"
         )
-        self._add_mistake()
+        self._grade_mistake(False)
         self.results[self.q_index] = (False, None, message)
         self._apply_result_colors(False, None)
         self._finish(False, message, GRAY)
@@ -715,13 +725,33 @@ class EarTrainer(tk.Tk):
         if not ok and clicked and clicked != self.expected_name:
             self.note_buttons[clicked].configure(bg=RED, fg="white")
 
-    def _add_mistake(self) -> None:
-        """把当前题的音记入错题集(按音高合并, 等音写法共用一条)并保存."""
+    def _grade_mistake(self, ok: bool) -> str | None:
+        """作答后更新错题集(按音高合并, 等音写法共用一条).
+
+        答错计入一条; 该音进入错题集后的作答正确率达到 95% 时移出,
+        返回给用户的提示文案(未移出时返回 None).
+        """
         pc = self.expected_midi % 12
-        name, count = self.mistakes.get(pc, (self.expected_name, 0))
-        self.mistakes[pc] = (name, count + 1)
+        item = self.mistakes.get(pc)
+        if item is None:
+            if ok:
+                return None
+            name, count, tries, hits = self.expected_name, 0, 0, 0
+        else:
+            name, count, tries, hits = item
+        tries += 1
+        hits += 1 if ok else 0
+        count += 0 if ok else 1
+        rate = hits / tries
+        if rate >= 0.95:
+            del self.mistakes[pc]
+            message: str | None = f"正确率 {round(rate * 100)}%，已移出错题集"
+        else:
+            self.mistakes[pc] = (name, count, tries, hits)
+            message = None
         save_mistakes(self.mistakes_file, self.mistakes)
         self._update_mistake_button()
+        return message
 
     def _update_mistake_button(self) -> None:
         count = len(self.mistakes)

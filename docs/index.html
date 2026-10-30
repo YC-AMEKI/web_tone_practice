@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="听音辨名 · 绝对音感训练小工具（纯浏览器运行，无需后端）">
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Ctext%20y='.9em'%20font-size='90'%3E%F0%9F%8E%B9%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Crect x='9' y='12' width='46' height='40' rx='5' fill='%23ffffff'/%3E%3Cpath d='M20 12v40M32 12v40M44 12v40' stroke='%23d1d5db' stroke-width='2'/%3E%3Crect x='14.5' y='12' width='9' height='23' rx='2' fill='%2323272f'/%3E%3Crect x='38.5' y='12' width='9' height='23' rx='2' fill='%2323272f'/%3E%3C/svg%3E">
 <title>音准练习 · 听音辨名</title>
 <style>
   :root{
@@ -38,7 +38,8 @@
          linear-gradient(160deg, var(--bg1), var(--bg2));}
   .app{width:100%;max-width:600px;background:var(--card);border:1px solid var(--line);
        border-radius:18px;box-shadow:var(--shadow);padding:22px 24px 16px}
-  h1{margin:0;font-size:26px;text-align:center;letter-spacing:.5px}
+  h1{margin:0;font-size:26px;text-align:center;letter-spacing:.5px;display:flex;align-items:center;justify-content:center;gap:10px}
+  .logo{width:27px;height:27px;flex:none}
   .sub{text-align:center;color:var(--sub);font-size:13px;margin:4px 0 12px}
   .header-rule{height:3px;width:58px;margin:0 auto 14px;border-radius:2px;
        background:linear-gradient(90deg, var(--blue), #22c55e)}
@@ -55,8 +56,6 @@
 
   .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:8px 0}
   .row label{font-size:13.5px;color:var(--sub)}
-  .group{display:flex;align-items:center;gap:6px;transition:opacity .2s}
-  .group.dim{opacity:.45;pointer-events:none}  /* 错题页不使用调性 */
   select{appearance:none;-webkit-appearance:none;padding:6px 30px 6px 10px;
        border:1px solid var(--line);border-radius:10px;background-color:var(--card);color:var(--text);
        font-size:14px;cursor:pointer;
@@ -75,7 +74,13 @@
 
   button{border:1px solid var(--line);border-radius:10px;font-size:14px;cursor:pointer;
        padding:9px 13px;background:var(--card);color:var(--text);
+       display:inline-flex;align-items:center;justify-content:center;gap:7px;
        transition:transform .12s ease, background-color .15s ease, box-shadow .15s ease, filter .15s ease}
+  .ic{width:15px;height:15px;flex:none}
+  .primary .ic{width:17px;height:17px}
+  .playbtn .ic{display:none}
+  .playbtn:not(.replay-mode) .ic-play{display:block}
+  .playbtn.replay-mode .ic-replay{display:block}
   button:focus-visible{outline:2px solid var(--blue2);outline-offset:2px}
   button:disabled{opacity:.45;cursor:default}
   .row button:not(.primary):not(:disabled):hover{background:var(--note-bg);transform:translateY(-1px)}
@@ -116,11 +121,19 @@
 
   .bottom{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px}
   .chips{display:flex;flex-wrap:wrap;gap:5px;font-size:12px}
-  .chips span{padding:2px 9px;border-radius:999px;font-weight:600}
+  .chips span{padding:2px 9px;border-radius:999px;font-weight:600;display:inline-flex;align-items:center;gap:5px}
+  .chips span::after{content:"";width:9px;height:5px;flex:none;border-left:2.5px solid currentColor;
+       border-bottom:2.5px solid currentColor;transform:rotate(-45deg)}
+  .chips .bad::after{width:9px;height:9px;border:none;transform:rotate(45deg);
+       background:
+         linear-gradient(currentColor,currentColor) center/100% 2.5px no-repeat,
+         linear-gradient(currentColor,currentColor) center/2.5px 100% no-repeat}
   .chips .ok{color:var(--green-deep);background:rgba(34,197,94,.13)}
   .chips .bad{color:var(--red-deep);background:rgba(239,68,68,.13)}
-  .progress{color:var(--sub);font-size:12px;white-space:nowrap}
-  .progress:not(:empty)::before{content:"⏳ "}
+  .progress{color:var(--sub);font-size:12px;white-space:nowrap;display:flex;align-items:center;gap:6px}
+  .progress:not(:empty)::before{content:"";width:11px;height:11px;border-radius:50%;flex:none;
+       border:2px solid var(--line);border-top-color:var(--blue);animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
   .hint{color:var(--muted);font-size:12px;text-align:center;margin:12px 0 2px;padding-top:10px;
        border-top:1px dashed var(--line)}
 
@@ -137,17 +150,21 @@
 </head>
 <body>
 <div class="app">
-  <h1>🎹 音准练习</h1>
+  <h1><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3.5" width="20" height="17" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.7 3.5v17M15.3 3.5v17" stroke="currentColor" stroke-width="1.3"/><rect x="5.9" y="3.5" width="3.1" height="8.5" rx="1.2" fill="currentColor"/><rect x="13" y="3.5" width="3.1" height="8.5" rx="1.2" fill="currentColor"/></svg>音准练习</h1>
   <div class="sub">听音辨名 · 绝对音感训练</div>
   <div class="header-rule"></div>
 
   <nav class="tabs">
-    <button class="tab active" data-view="practice" type="button">🎹 日常练习</button>
-    <button class="tab" data-view="mistakes" type="button">🎯 错题练习 <span class="badge" id="mistakeBadge" hidden>0</span></button>
+    <button class="tab active" data-view="practice" type="button">
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3.5" width="20" height="17" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.7 3.5v17M15.3 3.5v17" stroke="currentColor" stroke-width="1.3"/><rect x="5.9" y="3.5" width="3.1" height="8.5" rx="1.2" fill="currentColor"/><rect x="13" y="3.5" width="3.1" height="8.5" rx="1.2" fill="currentColor"/></svg>日常练习
+    </button>
+    <button class="tab" data-view="mistakes" type="button">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg>错题练习 <span class="badge" id="mistakeBadge" hidden>0</span>
+    </button>
   </nav>
 
   <div class="row">
-    <span class="group" id="scaleGroup"><label>调性</label><select id="scaleBox"></select></span>
+    <label>调性</label><select id="scaleBox"></select>
     <label>八度</label><select id="octaveBox"></select>
     <label>题数</label><select id="sizeBox"></select>
     <span class="check"><input type="checkbox" id="autoNext" checked><label for="autoNext">自动下一题</label></span>
@@ -155,22 +172,30 @@
 
   <section id="p-view">
     <div class="row">
-      <button class="primary" id="p-play">▶  开始练习</button>
-      <button id="p-prev">⏮ 上一题</button>
-      <button id="p-next">⏭ 下一题</button>
-      <button id="p-reveal">🙈 看答案</button>
+      <button class="primary playbtn" id="p-play">
+        <svg class="ic ic-play" viewBox="0 0 24 24" aria-hidden="true"><polygon points="7 4 20 12 7 20" fill="currentColor"/></svg>
+        <svg class="ic ic-replay" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        <span class="label">开始练习</span>
+      </button>
+      <button id="p-prev"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><polygon points="19 20 9 12 19 4" fill="currentColor"/><line x1="5" y1="5" x2="5" y2="19" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>上一题</button>
+      <button id="p-next"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><polygon points="5 4 15 12 5 20" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>下一题</button>
+      <button id="p-reveal"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>看答案</button>
     </div>
     <div class="notes" id="p-notes"></div>
-    <div class="feedback" id="p-feedback">选好调性、八度和题数，点「开始练习」🎧</div>
+    <div class="feedback" id="p-feedback">选好调性、八度和题数，点「开始练习」</div>
   </section>
 
   <section id="m-view" hidden>
     <div class="mistake-list">错题集：<span id="mistakeChips">（空）</span></div>
     <div class="row">
-      <button class="primary" id="m-play">▶  开始错题练习</button>
-      <button id="m-prev">⏮ 上一题</button>
-      <button id="m-next">⏭ 下一题</button>
-      <button id="m-reveal">🙈 看答案</button>
+      <button class="primary playbtn" id="m-play">
+        <svg class="ic ic-play" viewBox="0 0 24 24" aria-hidden="true"><polygon points="7 4 20 12 7 20" fill="currentColor"/></svg>
+        <svg class="ic ic-replay" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        <span class="label">开始错题练习</span>
+      </button>
+      <button id="m-prev"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><polygon points="19 20 9 12 19 4" fill="currentColor"/><line x1="5" y1="5" x2="5" y2="19" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>上一题</button>
+      <button id="m-next"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><polygon points="5 4 15 12 5 20" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>下一题</button>
+      <button id="m-reveal"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>看答案</button>
     </div>
     <div class="notes" id="m-notes"></div>
     <div class="feedback" id="m-feedback">错题集是空的；在「日常练习」里答错、跳过或看答案的音会自动收进来</div>
@@ -223,14 +248,17 @@ const shared = {
 };
 
 function loadMistakes(){
-  try { return JSON.parse(localStorage.getItem("mistakes") || "{}"); }
-  catch { return {}; }
+  // 兼容旧版只有 name/count 的数据
+  try {
+    const raw = JSON.parse(localStorage.getItem("mistakes") || "{}");
+    const out = {};
+    for (const [pc, item] of Object.entries(raw)){
+      out[pc] = {name: item.name, count: item.count || 0, tries: item.tries || 0, hits: item.hits || 0};
+    }
+    return out;
+  } catch { return {}; }
 }
 function saveMistakes(){ localStorage.setItem("mistakes", JSON.stringify(shared.mistakes)); }
-function mistakeNames(){
-  return Object.keys(shared.mistakes).map(Number).sort((a, b) => a - b)
-    .map(pc => shared.mistakes[pc].name);
-}
 
 // ---- 乐理(音名都来自 SCALES 或错题集, 只需算音高) ----
 function pcOf(name){
@@ -362,7 +390,9 @@ function makeView(prefix, pool){
 }
 const views = {
   practice: makeView("p", () => SCALES[settings.scale.value]),
-  mistakes: makeView("m", () => mistakeNames()),
+  // 错题练习只考当前调性音阶里错过的音, 选项则与日常练习一致(整个音阶)
+  mistakes: makeView("m", () => SCALES[settings.scale.value]
+    .filter(name => pcOf(name) in shared.mistakes)),
 };
 let active = views.practice;
 
@@ -379,7 +409,9 @@ function startSession(view){
   cancelAutoNext(view);
   const names = view.pool();
   if (!names.length){
-    setFeedback(view, "错题集是空的；在「日常练习」里答错、跳过或看答案的音会自动收进来", GRAY);
+    setFeedback(view, !Object.keys(shared.mistakes).length
+      ? "错题集是空的；在「日常练习」里答错、跳过或看答案的音会自动收进来"
+      : `当前调性（${settings.scale.value}）的音阶里没有错题；可切换调性，或先做日常练习`, GRAY);
     return;
   }
   const count = Number(settings.size.value);
@@ -395,7 +427,7 @@ function startSession(view){
   view.results = Array(count).fill(null);
   view.qIndex = 0;
   view.sessionActive = true;
-  renderNoteButtons(view, names);
+  renderNoteButtons(view);
   enterQuestion(view, 0);
 }
 
@@ -403,7 +435,7 @@ function enterQuestion(view, index, silent = false){
   view.qIndex = index;
   const {midi} = expected(view);
   for (const btn of view.el.notes.children) btn.classList.remove("ok", "bad");
-  setPlayButton(view, "🔁  重听", () => replay(view));
+  setPlayButton(view, "重听", true, () => replay(view));
   const recorded = view.results[index];
   if (recorded === null){
     setFeedback(view, `仔细听……第 ${index + 1}/${view.questions.length} 题，这是什么音？`, DARK);
@@ -421,14 +453,17 @@ function renderCurrent(view){  // 切回页面时刷新显示, 不发声
 }
 
 function renderIdle(view){
-  setPlayButton(view, view === views.practice ? "▶  开始练习" : "▶  开始错题练习",
+  setPlayButton(view, view === views.practice ? "开始练习" : "开始错题练习", false,
     () => startSession(view));
   if (view === views.practice){
-    setFeedback(view, "选好调性、八度和题数，点「开始练习」🎧", GRAY);
+    setFeedback(view, "选好调性、八度和题数，点「开始练习」", GRAY);
   } else if (!Object.keys(shared.mistakes).length){
     setFeedback(view, "错题集是空的；在「日常练习」里答错、跳过或看答案的音会自动收进来", GRAY);
+  } else if (!views.mistakes.pool().length){
+    setFeedback(view, `当前调性（${settings.scale.value}）的音阶里没有错题；可切换调性，或先做日常练习`, GRAY);
   } else {
-    setFeedback(view, `错题集共 ${Object.keys(shared.mistakes).length} 个音，点「开始错题练习」🎯`, GRAY);
+    setFeedback(view, `错题集共 ${Object.keys(shared.mistakes).length} 个音（当前调性可练 `
+      + `${views.mistakes.pool().length} 个），点「开始错题练习」`, GRAY);
   }
 }
 
@@ -459,7 +494,7 @@ function nextQuestion(view){
     return;
   }
   cancelAutoNext(view);
-  if (view.results[view.qIndex] === null){ forfeit(view, "⏭ 已跳过，正确答案"); return; }
+  if (view.results[view.qIndex] === null){ forfeit(view, "已跳过，正确答案"); return; }
   if (view.qIndex + 1 >= view.questions.length){ showSummary(view); return; }
   enterQuestion(view, view.qIndex + 1);
 }
@@ -472,22 +507,18 @@ function answer(view, name){
   if (pcOf(name) === expected(view).midi % 12){
     shared.correct++; shared.streak++;
     shared.bestStreak = Math.max(shared.bestStreak, shared.streak);
-    let message = `✅ 正确！是 ${shownNote(view)}（唱名 ${solfege(expected(view).name)}）`;
-    if (shared.streak >= 3) message += `　🔥 连对 ${shared.streak}`;
-    const expectedPc = expected(view).midi % 12;
-    if (expectedPc in shared.mistakes){
-      delete shared.mistakes[expectedPc];
-      saveMistakes(); updateMistakeUI();
-      message += "　🎉 已移出错题集";
-    }
+    let message = `正确！是 ${shownNote(view)}（唱名 ${solfege(expected(view).name)}）`;
+    if (shared.streak >= 3) message += `　连对 ${shared.streak}`;
+    const removal = gradeMistake(view, true);
+    if (removal) message += `　${removal}`;
     view.results[view.qIndex] = {ok: true, clicked: name, message};
     applyResultColors(view, true, name);
     finish(view, true, message, GREEN);
     if (settings.autoNext.checked) view.autoTimer = setTimeout(() => nextQuestion(view), 900);
   } else {
-    const message = `❌ 不是 ${display(name)}，正确答案是 ${shownNote(view)}`
-      + `（唱名 ${solfege(expected(view).name)}）。点「重听」加深印象 🎧`;
-    addMistake(view);
+    const message = `不是 ${display(name)}，正确答案是 ${shownNote(view)}`
+      + `（唱名 ${solfege(expected(view).name)}）。点「重听」加深印象`;
+    gradeMistake(view, false);
     view.results[view.qIndex] = {ok: false, clicked: name, message};
     applyResultColors(view, false, name);
     finish(view, false, message, RED);
@@ -500,12 +531,12 @@ function revealAnswer(view){
     setFeedback(view, "这题已经作答过了，点「下一题」继续", GRAY);
     return;
   }
-  forfeit(view, "🙈 答案");
+  forfeit(view, "答案");
 }
 
 function forfeit(view, prefix){
   const message = `${prefix}是 ${shownNote(view)}（唱名 ${solfege(expected(view).name)}），下一题加油`;
-  addMistake(view);
+  gradeMistake(view, false);
   view.results[view.qIndex] = {ok: false, clicked: null, message};
   applyResultColors(view, false, null);
   finish(view, false, message, GRAY);
@@ -518,19 +549,19 @@ function showSummary(view){
   const total = view.questions.length;
   const right = view.questions.filter((q, i) => view.results[i].ok).map(q => q.name);
   const wrong = view.questions.filter((q, i) => !view.results[i].ok).map(q => q.name);
-  const lines = [`🎉 练习完成！本轮 ${total} 题答对 ${right.length} 题（${Math.round(100 * right.length / total)}%）`];
-  if (right.length) lines.push("✅ 答对：" + [...new Set(right)].map(display).join("、"));
+  const lines = [`练习完成！本轮 ${total} 题答对 ${right.length} 题（${Math.round(100 * right.length / total)}%）`];
+  if (right.length) lines.push("答对：" + [...new Set(right)].map(display).join("、"));
   if (wrong.length){
     const parts = [...new Set(wrong)].map(n => {
       const c = wrong.filter(x => x === n).length;
       return c > 1 ? `${display(n)}×${c}` : display(n);
     });
-    lines.push(`❌ 答错：${parts.join("、")}（去「错题练习」巩固）`);
+    lines.push(`答错：${parts.join("、")}（去「错题练习」巩固）`);
   } else {
     lines.push("全部答对，太棒了！");
   }
   setFeedback(view, lines.join("\n"), DARK);
-  setPlayButton(view, "▶  再来一组", () => startSession(view));
+  setPlayButton(view, "再来一组", false, () => startSession(view));
   renderStats();
 }
 
@@ -545,12 +576,27 @@ function finish(view, ok, message, color){
   renderChips();
 }
 
-function addMistake(view){
+function gradeMistake(view, ok){
+  // 作答后更新错题集(按音高合并, 等音写法共用一条):
+  // 答错计入; 该音进入错题集后的作答正确率达到 95% 时移出, 返回提示文案
   const pc = expected(view).midi % 12;
-  const item = shared.mistakes[pc] || {name: expected(view).name, count: 0};
-  shared.mistakes[pc] = {name: item.name, count: item.count + 1};
-  saveMistakes();
-  updateMistakeUI();
+  const item = shared.mistakes[pc];
+  if (!item){
+    if (ok) return null;
+    shared.mistakes[pc] = {name: expected(view).name, count: 1, tries: 1, hits: 0};
+    saveMistakes(); updateMistakeUI();
+    return null;
+  }
+  item.tries++;
+  if (ok) item.hits++; else item.count++;
+  const rate = item.hits / item.tries;
+  let removal = null;
+  if (rate >= 0.95){
+    removal = `正确率 ${Math.round(rate * 100)}%，已移出错题集`;
+    delete shared.mistakes[pc];
+  }
+  saveMistakes(); updateMistakeUI();
+  return removal;
 }
 
 function applyResultColors(view, ok, clicked){
@@ -577,12 +623,15 @@ function setFeedback(view, text, color){
   }
 }
 
-function setPlayButton(view, text, handler){ view.el.play.textContent = text; view.el.play.onclick = handler; }
+function setPlayButton(view, label, replayMode, handler){
+  view.el.play.classList.toggle("replay-mode", replayMode);  // 图标(播放/重听)由 CSS 切换
+  view.el.play.querySelector(".label").textContent = label;
+  view.el.play.onclick = handler;
+}
 
-function renderNoteButtons(view, names){
-  names = names || view.pool();
+function renderNoteButtons(view){
   view.el.notes.textContent = "";
-  for (const name of names){
+  for (const name of SCALES[settings.scale.value]){
     const btn = document.createElement("button");
     btn.textContent = display(name);
     btn.dataset.name = name;
@@ -625,7 +674,7 @@ function renderChips(){
   for (const [text, ok] of shared.history){
     const span = document.createElement("span");
     span.className = ok ? "ok" : "bad";
-    span.textContent = `${text} ${ok ? "✓" : "✗"}`;
+    span.textContent = text;  // 对勾/叉由 CSS ::after 画出
     chips.appendChild(span);
   }
 }
@@ -641,7 +690,6 @@ function switchView(name){
   }
   views.practice.el.root.hidden = name !== "practice";
   views.mistakes.el.root.hidden = name !== "mistakes";
-  $("scaleGroup").classList.toggle("dim", name === "mistakes");  // 错题练习不使用调性
   renderCurrent(view);
   renderStats();
 }
@@ -649,23 +697,18 @@ function switchView(name){
 function invalidate(view){  // 作废进行中的一组
   cancelAutoNext(view);
   view.sessionActive = false;
-  if (view === views.practice) renderNoteButtons(views.practice);
+  renderNoteButtons(view);
   if (view === active) renderIdle(view);
 }
 
-settings.scale.onchange = () => {
-  invalidate(views.practice);  // 错题练习不受调性影响
-  if (active === views.practice){
-    setFeedback(views.practice,
-      `已切换：${settings.scale.value} · 八度 ${settings.octave.value}，点「开始练习」开始`, GRAY);
-  }
-};
-settings.octave.onchange = () => {
+function onScaleOctaveChange(){  // 调性/八度切换作废两个页面进行中的一组
   invalidate(views.practice);
   invalidate(views.mistakes);
-  const message = `八度已切换为 ${settings.octave.value}，重新开始一组吧`;
-  setFeedback(active, message, GRAY);
-};
+  setFeedback(active,
+    `已切换：${settings.scale.value} · 八度 ${settings.octave.value}，重新开始一组吧`, GRAY);
+}
+settings.scale.onchange = onScaleOctaveChange;
+settings.octave.onchange = onScaleOctaveChange;
 
 // ---- 初始化 ----
 for (const [box, values, initial] of [
@@ -688,7 +731,7 @@ for (const view of Object.values(views)){
   view.el.prev.onclick = () => prevQuestion(view);
   view.el.next.onclick = () => nextQuestion(view);
   view.el.reveal.onclick = () => revealAnswer(view);
-  setPlayButton(view, view === views.practice ? "▶  开始练习" : "▶  开始错题练习", () => startSession(view));
+  setPlayButton(view, view === views.practice ? "开始练习" : "开始错题练习", false, () => startSession(view));
 }
 
 document.addEventListener("keydown", e => {
@@ -700,7 +743,7 @@ document.addEventListener("keydown", e => {
 
 updateMistakeUI();
 renderNoteButtons(views.practice);
-if (mistakeNames().length) renderNoteButtons(views.mistakes);  // 有错题时先亮出错题琴键
+renderNoteButtons(views.mistakes);  // 选项与日常练习一致: 都是当前调性的音阶
 renderStats();
 preload();
 </script>

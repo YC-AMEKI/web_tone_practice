@@ -48,8 +48,11 @@ assert "不是" in app.feedback.cget("text") and "正确答案是" in app.feedba
 assert (app.attempts, app.correct, app.streak) == (1, 0, 0)
 assert app.mistakes[6][0] == "F#"
 assert json.loads((tmp / "mistakes.json").read_text("utf-8")) == {
-    "6": {"name": "F#", "count": 1}
+    "6": {"name": "F#", "count": 1, "tries": 1, "hits": 0}
 }
+# 兼容旧版只有 name/count 的错题文件
+(tmp / "old.json").write_text(json.dumps({"0": {"name": "C", "count": 3}}), encoding="utf-8")
+assert tp.load_mistakes(tmp / "old.json") == {0: ("C", 3, 0, 0)}
 
 app.next_question()  # 第 1 题已答 → 进入第 2 题
 app.questions[1] = ("A", 69)
@@ -86,12 +89,16 @@ assert "练习完成" in summary and "答对" in summary and "答错" in summary
 assert (app.attempts, app.correct) == (5, 2)
 assert set(app.mistakes) == {6, 4, 7}
 
-app.start_session(from_mistakes=True)  # 错题练习: 只考错过的音
-assert set(app.note_buttons) == {"F#", "E", "G"}
+app.start_session(from_mistakes=True)  # 错题练习: 只考错过的音, 选项仍是整个音阶
+assert set(app.note_buttons) == set(tp.SCALES["G大调"])
 assert all(name in {"F#", "E", "G"} for name, _midi in app.questions)
 app.questions[0] = ("F#", 54)
 app._enter_question(0)
-app.answer("F#")  # 答对一次 → 移出错题集
+app.answer("F#")  # 答对一次不再直接移出(正确率 1/2)
+assert 6 in app.mistakes and app.mistakes[6][2:] == (2, 1)
+for _ in range(18):  # 连续答对, 正确率达到 95% 才移出
+    app.results[app.q_index] = None
+    app.answer("F#")
 assert 6 not in app.mistakes and len(app.mistakes) == 2
 assert "移出错题集" in app.feedback.cget("text")
 assert "6" not in json.loads((tmp / "mistakes.json").read_text("utf-8"))
